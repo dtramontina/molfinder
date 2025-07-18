@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="history-container">
+    <h1>Analysis History</h1>
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Input File</th>
+                <th>Atom Mappings</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs_pagination.items %}
+            <tr onclick="window.location='{{ url_for('results', run_id=run.id) }}';">
+                <td><a href="{{ url_for('results', run_id=run.id) }}">{{ run.name }}</a></td>
+                <td>{{ run.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ run.lammps_file.split('/')[-1] }}</td>
+                <td>{{ run.atom_mappings }}</td>
+                <td class="status-{{ run.status.lower() }}">{{ run.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        {% if runs_pagination.has_prev %}
+            <a href="{{ url_for('history', page=runs_pagination.prev_num) }}">&laquo; Previous</a>
+        {% endif %}
+
+        {% for page_num in runs_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+                {% if runs_pagination.page == page_num %}
+                    <span class="current">{{ page_num }}</span>
+                {% else %}
+                    <a href="{{ url_for('history', page=page_num) }}">{{ page_num }}</a>
+                {% endif %}
+            {% else %}
+                <span class="ellipsis">…</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if runs_pagination.has_next %}
+            <a href="{{ url_for('history', page=runs_pagination.next_num) }}">Next &raquo;</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

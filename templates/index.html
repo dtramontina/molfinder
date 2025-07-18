@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LAMMPS Molecule Finder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>LAMMPS Molecule Finder</h1>
+    <form action="/analyze" method="post" enctype="multipart/form-data">
+        <label for="atom_types">Atom Type Mapping (e.g., 1:C, 2:H):</label>
+        <input type="text" id="atom_types" name="atom_types" required value="{{ atom_types or '1:C, 2:H' }}">
+        
+        <label for="lammps_file">LAMMPS File:</label>
+        <input type="file" id="lammps_file" name="lammps_file" required>
+        
+        <input type="submit" value="Analyze">
+
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="form-container">
+        <h1>New Analysis</h1>
+        <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="analysis_name">Analysis Name:</label>
+                <input type="text" id="analysis_name" name="analysis_name" placeholder="e.g., Pyrene 500ps 1000K" required>
+            </div>
+            <div class="form-group">
+                <label for="atom_types">Atom Type Mapping:</label>
+                <input type="text" id="atom_types" name="atom_types" required placeholder="e.g., 1:C, 2:H, 3:O" value="1:C, 2:H">
+                <small>Comma-separated pairs of LAMMPS type ID to element symbol.</small>
+            </div>
+            <div class="form-group">
+                <label for="lammps_file">LAMMPS Data/Dump File:</label>
+                <input type="file" id="lammps_file" name="lammps_file" required>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Start Analysis" class="button">
+            </div>
+        </form>
+    </div>
+{% endblock %}
+   </form>
+
+    {% if results %}
+    <div class="results">
+        <h2>Analysis Results</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Molecule (SMILES)</th>
+                    <th>Count</th>
+                    <th>2D Structure</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in results %}
+                <tr>
+                    <td>{{ result.smiles }}</td>
+                    <td>{{ result.count }}</td>
+                    <td><img src="{{ url_for('static', filename=result.image_path) }}" alt="{{ result.smiles }}"></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</body>
+</html>
+
+

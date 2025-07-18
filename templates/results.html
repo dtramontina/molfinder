@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="results-container">
+    <h1>Results for: {{ run.name }}</h1>
+    <div class="run-meta">
+        <p><strong>Ran on:</strong> {{ run.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+        <p><strong>Input File:</strong> {{ run.lammps_file.split('/')[-1] }}</p>
+        <p><strong>Atom Mappings:</strong> {{ run.atom_mappings }}</p>
+    </div>
+
+    <h2>Found Molecules</h2>
+    <div class="results-tree">
+        {% for stoich in run.stoichiometries|sort(attribute='count', reverse=True) %}
+        <div class="stoichiometry-group">
+            <h3>{{ stoich.formula }} (Found {{ stoich.count }} times)</h3>
+            <div class="isomers-grid">
+                {% for molecule in stoich.molecules %}
+                <div class="molecule-card">
+                    <img src="{{ url_for('static', filename=molecule.image_path) }}" alt="Image of {{ molecule.name }}">
+                    <div class="molecule-info">
+                        <strong>{{ molecule.name }}</strong>
+                        <p class="smiles-code">{{ molecule.smiles }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
