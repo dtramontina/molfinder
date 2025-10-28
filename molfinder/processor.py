@@ -2,12 +2,29 @@ import re
 import io
 import logging
 from collections import defaultdict
-from ovito.io import import_file
-from ovito.modifiers import ClusterAnalysisModifier, CreateBondsModifier
-from ovito.data import Bonds, ParticleType
-import ovito
+from ovito import *
+from ovito.io import *
+from ovito.modifiers import *
+from ovito.pipeline import *
+from ovito.vis import *
+from ovito.data import *
+
 from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Chem import Draw
+from rdkit.Chem import MolToSmiles
+from rdkit.Chem import BondType
+from rdkit.Chem import PyMol
 from .molecule import Molecule
+
+# from IPython.display import display
+# import matplotlib.pyplot as plt
+# import requests
+# from time import sleep
+
+
+
+
 
 class LammpsProcessor:
     """
