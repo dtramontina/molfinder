@@ -31,7 +31,7 @@ def analyze():
         return redirect(request.url)
 
     file = request.files['lammps_file']
-    analysis_name = request.form.get('analysis_name', 'Untitled Analysis')
+    analysis_name = 'Untitled Analysis'
     atom_mapping_str = request.form.get('atom_types', '')
 
     if file.filename == '':

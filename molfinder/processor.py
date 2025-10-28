@@ -3,7 +3,9 @@ from ovito.io import import_file
 from ovito.modifiers import ClusterAnalysisModifier, CreateBondsModifier
 from ovito.data import Bonds
 from rdkit import Chem
+from rdkit.Chem import BondType
 from .molecule import Molecule
+import requests
 
 class LammpsProcessor:
     """
@@ -29,32 +31,110 @@ class LammpsProcessor:
         except (ValueError, IndexError):
             raise ValueError("Invalid atom type mapping format. Use '1:C, 2:H, ...'")
 
-    def _create_rdkit_mol(self, cluster_data):
-        """Creates an RDKit molecule from a cluster of atoms and bonds."""
-        mol = Chem.RWMol()
-        atom_map = {}  # Maps OVITO atom index to RDKit atom index
-
-        # Add atoms
-        for ovito_idx, symbol in cluster_data['atoms']:
-            rdkit_idx = mol.AddAtom(Chem.Atom(symbol))
-            atom_map[ovito_idx] = rdkit_idx
-        
-        # Add bonds
-        for a_ovito, b_ovito in cluster_data['bonds']:
-            if a_ovito in atom_map and b_ovito in atom_map:
-                mol.AddBond(atom_map[a_ovito], atom_map[b_ovito], Chem.BondType.SINGLE)
-        
-        # Sanitize and finalize the molecule
+    def get_molecule_name(self, mol, smiles):
+        """Get the best available name for a molecule"""
         try:
-            # Basic sanitization, which also calculates valency, aromaticity, etc.
-            Chem.SanitizeMol(mol)
-            return mol
-        except Chem.rdchem.AtomValenceException:
-            # A more robust solution could try to fix valency issues here,
-            # for now, we just return the unsanitized molecule.
-            return mol.GetMol()
-        except Exception:
-            return None
+            name = Chem.MolToCommonName(mol)
+            if name: return name
+        except: pass
+
+        try:
+            url = f"https://cactus.nci.nih.gov/chemical/structure/{smiles}/iupac_name"
+            response = requests.get(url, timeout=2)
+            if response.ok: return response.text.strip()
+        except: pass
+
+        return smiles
+
+    def process_clusters_to_molecules(self, data):
+        """Convert OVITO clusters to RDKit molecules, handling valence issues."""
+        molecules = []
+        
+        clusters = data.particles['Cluster']
+        particle_types = data.particles['Particle Type']
+        bonds = data.particles.bonds
+        positions = data.particles.positions
+        
+        type_to_symbol = self.atom_type_map
+
+        cluster_atoms = defaultdict(list)
+        for atom_idx, (cluster_id, atom_type) in enumerate(zip(clusters, particle_types)):
+            cluster_atoms[cluster_id].append((atom_idx, type_to_symbol.get(atom_type, 'X')))
+
+        for cluster_id, atoms in cluster_atoms.items():
+            if len(atoms) <= 1:
+                continue
+
+            mol = Chem.RWMol()
+            atom_map = {}
+
+            for ovito_idx, symbol in atoms:
+                atom = Chem.Atom(symbol)
+                rdkit_idx = mol.AddAtom(atom)
+                atom_map[ovito_idx] = rdkit_idx
+
+            if isinstance(bonds, Bonds):
+                bond_array = bonds.topology
+                for a_ovito, b_ovito in bond_array:
+                    if a_ovito in atom_map and b_ovito in atom_map:
+                        try:
+                            mol.AddBond(atom_map[a_ovito], atom_map[b_ovito], BondType.SINGLE)
+                        except:
+                            continue
+
+            try:
+                for atom in mol.GetAtoms():
+                    if atom.GetSymbol() == 'H' and atom.GetDegree() > 1:
+                          bonds_list = list(atom.GetBonds())
+                          for bond in bonds_list[1:]:
+                              mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+                Chem.SanitizeMol(mol)
+                smiles = Chem.MolToSmiles(mol, canonical=True)
+                molecules.append({
+                    'cluster_id': cluster_id,
+                    'mol': mol,
+                    'smiles': smiles,
+                    'atom_count': len(atoms),
+                    'positions': [positions[idx] for idx, _ in atoms]
+                })
+            except Exception as e:
+                continue
+        return molecules
+
+    def generate_mol_report(self, cluster_molecules):
+        """
+        Generates a molecular report from processed cluster data.
+        """
+        mol_groups = defaultdict(lambda: {
+            'count': 0,
+            'cluster_ids': [],
+            'molecules': [],
+            'atom_count': None
+        })
+
+        for mol_data in cluster_molecules:
+            smiles = mol_data['smiles']
+            mol_groups[smiles]['count'] += 1
+            mol_groups[smiles]['cluster_ids'].append(mol_data['cluster_id'])
+            mol_groups[smiles]['molecules'].append(mol_data)
+            mol_groups[smiles]['atom_count'] = mol_data['atom_count']
+
+        mol_report = []
+        for smiles, group_data in sorted(mol_groups.items(),
+                                       key=lambda x: x[1]['count'],
+                                       reverse=True):
+            representative = group_data['molecules'][0]
+
+            mol_report.append({
+                'count': group_data['count'],
+                'cluster_ids': sorted(group_data['cluster_ids']),
+                'representative_mol': representative['mol'],
+                'smiles': smiles,
+                'atom_count': group_data['atom_count'],
+                'name': self.get_molecule_name(representative['mol'], smiles)
+            })
+
+        return mol_report
 
     def process(self):
         """
@@ -63,53 +143,41 @@ class LammpsProcessor:
         """
         pipeline = import_file(self.filepath)
 
-        # Set atom types from mapping to enable OVITO's element-based modifiers
         def assign_particle_types(frame, data):
             particle_types = data.particles_.create_property('Particle Type', data=data.particles['Particle Type'])
             for type_id, symbol in self.atom_type_map.items():
                 particle_types.type_by_id(type_id).name = symbol
         pipeline.modifiers.append(assign_particle_types)
 
-        # Create bonds based on typical covalent radii cutoffs.
-        # This is a general approach; specific systems might need fine-tuning.
-        bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise)
-        bonds_modifier.set_pairwise_cutoff('C', 'C', 1.7)
-        bonds_modifier.set_pairwise_cutoff('H', 'C', 1.3)
-        bonds_modifier.set_pairwise_cutoff('H', 'H', 1.0)
-        bonds_modifier.set_pairwise_cutoff('O', 'C', 1.6)
-        bonds_modifier.set_pairwise_cutoff('O', 'H', 1.1)
-        bonds_modifier.set_pairwise_cutoff('N', 'C', 1.6)
-        bonds_modifier.set_pairwise_cutoff('N', 'H', 1.2)
+        bonds_modifier = CreateBondsModifier()
+        bonds_modifier.mode = CreateBondsModifier.Mode.Pairwise
+        bonds_modifier.intra_molecule_only = True
+        bonds_modifier.set_pairwise_cutoff('C', 'C', 1.65)
+        bonds_modifier.set_pairwise_cutoff('H', 'C', 1.25)
+        bonds_modifier.set_pairwise_cutoff('H', 'H', 0.95)
         pipeline.modifiers.append(bonds_modifier)
 
-        # Identify connected clusters of atoms
-        pipeline.modifiers.append(ClusterAnalysisModifier(cutoff=0.1, sort_by_size=True))
+        cluster_modifier = ClusterAnalysisModifier()
+        cluster_modifier.neighbor_mode = ClusterAnalysisModifier.NeighborMode.CutoffRange
+        cluster_modifier.cutoff = 1.5
+        cluster_modifier.sort_by_size = True
+        cluster_modifier.unwrap_particles = True
+        cluster_modifier.cluster_coloring = True
+        pipeline.modifiers.append(cluster_modifier)
 
         data = pipeline.compute()
 
-        # Extract cluster information
-        clusters_table = data.tables['clusters']
-        bonds = data.particles.bonds
+        molecules = self.process_clusters_to_molecules(data)
+        mol_report = self.generate_mol_report(molecules)
 
         molecule_groups = defaultdict(lambda: {'count': 0, 'molecules': []})
-
-        for cluster_index in range(len(clusters_table.clusters)):
-            particle_indices = clusters_table.particle_indices_in_cluster(cluster_index)
-            if len(particle_indices) <= 1: continue # Skip single atoms
-
-            cluster_bonds = [(a, b) for (a, b) in bonds.topology if a in particle_indices and b in particle_indices]
-            cluster_atoms = [(idx, self.atom_type_map[data.particles['Particle Type'][idx]]) for idx in particle_indices]
+        for entry in mol_report:
+            mol_obj = Molecule(entry['representative_mol'])
+            mol_obj.name = entry['name']
+            molecule_groups[mol_obj.formula]['count'] += entry['count']
             
-            rdkit_mol = self._create_rdkit_mol({'atoms': cluster_atoms, 'bonds': cluster_bonds})
-            if rdkit_mol:
-                mol_obj = Molecule(rdkit_mol)
-                molecule_groups[mol_obj.formula]['count'] += 1
-                
-                # Add if it's a new isomer for this formula
-                if not any(m.smiles == mol_obj.smiles for m in molecule_groups[mol_obj.formula]['molecules']):
-                    molecule_groups[mol_obj.formula]['molecules'].append(mol_obj)
+            is_new_isomer = not any(m.smiles == mol_obj.smiles for m in molecule_groups[mol_obj.formula]['molecules'])
+            if is_new_isomer:
+                molecule_groups[mol_obj.formula]['molecules'].append(mol_obj)
 
-        # Sort by abundance
         return dict(sorted(molecule_groups.items(), key=lambda item: item[1]['count'], reverse=True))
-
-
