@@ -136,7 +136,8 @@ class LammpsProcessor:
                 self._setup_particle_types(data)
 
             # Now that types are set, create bonds
-            bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise)
+            bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise,
+                                                intra_molecule_only = True)
 
             # Dynamically set cutoffs from OVITO's default database
             defaults = ParticleType.load_defaults()
@@ -154,6 +155,7 @@ class LammpsProcessor:
                     bonds_modifier.set_pairwise_cutoff(type_a.name, type_b.name, cutoff)
 
             pipeline.modifiers.append(bonds_modifier)
+            pipeline.compute()
 
         pipeline.modifiers.append(setup_types_and_bonds)
 
