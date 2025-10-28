@@ -83,7 +83,7 @@ class LammpsProcessor:
         pipeline.modifiers.append(bonds_modifier)
 
         # Identify connected clusters of atoms
-        pipeline.modifiers.append(ClusterAnalysisModifier(cutoff=0.1, sort_by_size=True))
+        pipeline.modifiers.append(ClusterAnalysisModifier(neighbor_mode=ClusterAnalysisModifier.NeighborMode.Bonding))
 
         data = pipeline.compute()
 
