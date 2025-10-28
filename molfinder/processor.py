@@ -1,8 +1,11 @@
 import re
+import io
+import logging
 from collections import defaultdict
 from ovito.io import import_file
 from ovito.modifiers import ClusterAnalysisModifier, CreateBondsModifier
 from ovito.data import Bonds, ParticleType
+import ovito
 from rdkit import Chem
 from .molecule import Molecule
 
@@ -21,6 +24,11 @@ class LammpsProcessor:
         self.filepath = filepath
         self.user_atom_mapping_str = atom_mapping_str
         self.atom_type_map = {}
+        self.log_stream = io.StringIO()
+
+    def _setup_logging(self):
+        """Sets up OVITO's logging to capture messages."""
+        ovito.enable_logging(self.log_stream, level=logging.INFO)
 
     def _setup_particle_types(self, data):
         """
@@ -102,6 +110,7 @@ class LammpsProcessor:
         """
         Executes the full analysis pipeline on the LAMMPS file.
         """
+        self._setup_logging()
         pipeline = import_file(self.filepath)
 
         # The setup of particle types is now deferred until the pipeline is evaluated
@@ -158,3 +167,7 @@ class LammpsProcessor:
                     molecule_groups[mol_obj.formula]['molecules'].append(mol_obj)
 
         return dict(sorted(molecule_groups.items(), key=lambda item: item[1]['count'], reverse=True))
+
+    def get_log_messages(self):
+        """Returns the captured log messages."""
+        return self.log_stream.getvalue()

@@ -18,7 +18,11 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/')
 def index():
-    return render_template('index.html', title="Home")
+    run_id = request.args.get('run_id', None)
+    run = None
+    if run_id:
+        run = db.session.get(AnalysisRun, run_id)
+    return render_template('index.html', title="Home", run=run)
 
 @app.route('/analyze', methods=['GET', 'POST'])
 def analyze():
@@ -85,15 +89,17 @@ def analyze():
                     db.session.add(mol_instance)
 
             run.status = 'Completed'
+            run.log_messages = processor.get_log_messages()
             db.session.commit()
-            return redirect(url_for('results', run_id=run.id))
+            return redirect(url_for('index', run_id=run.id))
 
         except Exception as e:
             run.status = 'Failed'
             run.error_message = str(e)
+            run.log_messages = processor.get_log_messages() if 'processor' in locals() else ''
             db.session.commit()
             flash(f"An error occurred during analysis: {e}")
-            return redirect(url_for('index'))
+            return redirect(url_for('index', run_id=run.id))
 
 @app.route('/results/<int:run_id>')
 def results(run_id):

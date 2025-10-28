@@ -2,8 +2,9 @@
 
 {% block content %}
     <div class="form-container">
-        <h1>New Analysis</h1>
-        <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+        <h1>LAMMPS Molecule Finder</h1>
+        <form id="analysis-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+            <!-- Form groups -->
             <div class="form-group">
                 <label for="analysis_name">Analysis Name:</label>
                 <input type="text" id="analysis_name" name="analysis_name" placeholder="e.g., Pyrene 500ps 1000K" required>
@@ -25,5 +26,96 @@
                 <input type="submit" value="Start Analysis" class="button">
             </div>
         </form>
+        <div id="wip-message" style="display:none;">
+            <h2>Work in Progress...</h2>
+            <p>Your analysis is running. Please do not navigate away from this page.</p>
+        </div>
     </div>
+
+    {% if run %}
+    <div class="results-container">
+        <h2>Results for: {{ run.name }}</h2>
+
+        <div class="log-container">
+            <h3>Analysis Log</h3>
+            <pre>{{ run.log_messages or "No log messages." }}</pre>
+        </div>
+
+        <div class="tree-container">
+            <h3>Molecular Results</h3>
+            <ul id="results-tree">
+                <li>
+                    <span class="caret">{{ run.name }}</span>
+                    <ul class="nested">
+                        {% for stoich in run.stoichiometries %}
+                        <li>
+                            <span class="caret">{{ stoich.formula }} (Count: {{ stoich.count }})</span>
+                            <ul class="nested">
+                                {% for molecule in stoich.molecules %}
+                                <li>
+                                    <a href="#" class="molecule-link" data-name="{{ molecule.name }}" data-smiles="{{ molecule.smiles }}" data-formula="{{ stoich.formula }}" data-image="{{ url_for('static', filename=molecule.image_path) }}">
+                                        {{ molecule.name }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- The Modal -->
+    <div id="moleculeModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3 id="modal-molecule-name"></h3>
+            <p><strong>Formula:</strong> <span id="modal-molecule-formula"></span></p>
+            <p><strong>SMILES:</strong> <span id="modal-molecule-smiles"></span></p>
+            <img id="modal-molecule-image" src="" alt="Molecule Image">
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('analysis-form').addEventListener('submit', function() {
+        document.getElementById('wip-message').style.display = 'block';
+    });
+
+    var toggler = document.getElementsByClassName("caret");
+    for (var i = 0; i < toggler.length; i++) {
+        toggler[i].addEventListener("click", function() {
+            this.parentElement.querySelector(".nested").classList.toggle("active");
+            this.classList.toggle("caret-down");
+        });
+    }
+
+    var modal = document.getElementById("moleculeModal");
+    var span = document.getElementsByClassName("close")[0];
+
+    document.querySelectorAll('.molecule-link').forEach(item => {
+        item.addEventListener('click', event => {
+            event.preventDefault();
+            document.getElementById('modal-molecule-name').textContent = item.dataset.name;
+            document.getElementById('modal-molecule-formula').textContent = item.dataset.formula;
+            document.getElementById('modal-molecule-smiles').textContent = item.dataset.smiles;
+            document.getElementById('modal-molecule-image').src = item.dataset.image;
+            modal.style.display = "block";
+        });
+    });
+
+    span.onclick = function() {
+        modal.style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+</script>
 {% endblock %}
