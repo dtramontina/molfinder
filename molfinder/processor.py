@@ -1,6 +1,4 @@
 import re
-import io
-import logging
 from collections import defaultdict
 import ovito
 from ovito.io import import_file
@@ -16,10 +14,6 @@ class LammpsProcessor:
     def __init__(self, filepath, atom_mapping_str):
         self.filepath = filepath
         self.user_atom_mapping_str = atom_mapping_str
-        self.log_stream = io.StringIO()
-
-    def _setup_logging(self):
-        ovito.enable_logging(self.log_stream, level=logging.INFO)
 
     def _ensure_element_names(self, data):
         """
@@ -90,7 +84,6 @@ class LammpsProcessor:
         """
         Executes the full analysis pipeline.
         """
-        self._setup_logging()
         pipeline = import_file(self.filepath)
         data = pipeline.compute()
 
@@ -108,27 +101,6 @@ class LammpsProcessor:
                 radius_a = defaults.get(type_a.name, {}).get('covalent_radius', 0.8)
                 radius_b = defaults.get(type_b.name, {}).get('covalent_radius', 0.8)
                 bonds_modifier.set_pairwise_cutoff(type_a.name, type_b.name, radius_a + radius_b)
-        # Set atom types from mapping to enable OVITO's element-based modifiers
-        def assign_particle_types(frame, data):
-            particle_types = data.particles_.create_property('Particle Type', data=data.particles['Particle Type'])
-            for type_id, symbol in self.atom_type_map.items():
-                particle_types.type_by_id(type_id).name = symbol
-        pipeline.modifiers.append(assign_particle_types)
-
-        # Create bonds based on typical covalent radii cutoffs.
-        # This is a general approach; specific systems might need fine-tuning.
-        bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise)
-        bonds_modifier.set_pairwise_cutoff('C', 'C', 1.7)
-        bonds_modifier.set_pairwise_cutoff('H', 'C', 1.3)
-        bonds_modifier.set_pairwise_cutoff('H', 'H', 1.0)
-        bonds_modifier.set_pairwise_cutoff('O', 'C', 1.6)
-        bonds_modifier.set_pairwise_cutoff('O', 'H', 1.1)
-        bonds_modifier.set_pairwise_cutoff('N', 'C', 1.6)
-        bonds_modifier.set_pairwise_cutoff('N', 'H', 1.2)
-        pipeline.modifiers.append(bonds_modifier)
-
-        # Identify connected clusters of atoms
-        pipeline.modifiers.append(ClusterAnalysisModifier(neighbor_mode=ClusterAnalysisModifier.NeighborMode.Bonding))
 
         pipeline.modifiers.append(bonds_modifier)
         data = pipeline.compute() # Re-compute to get molecule identifiers.
@@ -152,6 +124,3 @@ class LammpsProcessor:
                         molecule_groups[mol_obj.formula]['molecules'].append(mol_obj)
 
         return dict(sorted(molecule_groups.items(), key=lambda item: item[1]['count'], reverse=True))
-
-    def get_log_messages(self):
-        return self.log_stream.getvalue()
