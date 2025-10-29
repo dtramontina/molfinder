@@ -30,8 +30,8 @@ Follow these steps to run the application on your local machine.
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/dtramontina/molfinder-web-app.git
-    cd molfinder-web-app
+    git clone https://github.com/dtramontina/molfinder
+    cd molfinder
     ```
 
 2.  **Create a Virtual Environment:**
