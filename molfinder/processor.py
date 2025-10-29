@@ -2,7 +2,7 @@ import re
 from collections import defaultdict
 import ovito
 from ovito.io import import_file
-from ovito.modifiers import CreateBondsModifier
+from ovito.modifiers import CreateBondsModifier, ClusterAnalysisModifier
 from ovito.data import ParticleType
 from rdkit import Chem
 from .molecule import Molecule
@@ -90,29 +90,36 @@ class LammpsProcessor:
         # Step 1: Ensure particle types have element names.
         self._ensure_element_names(data)
 
-        # Step 2: Create bonds and identify molecules.
-        bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise, intra_molecule_only=True)
-        defaults = ParticleType.load_defaults()
+        # Step 2: Create bonds between atoms.
+        bonds_modifier = CreateBondsModifier(mode=CreateBondsModifier.Mode.Pairwise)
         type_list = list(data.particles.particle_types.types)
         for i in range(len(type_list)):
             for j in range(i, len(type_list)):
                 type_a = type_list[i]
                 type_b = type_list[j]
-                radius_a = defaults.get(type_a.name, {}).get('covalent_radius', 0.8)
-                radius_b = defaults.get(type_b.name, {}).get('covalent_radius', 0.8)
-                bonds_modifier.set_pairwise_cutoff(type_a.name, type_b.name, radius_a + radius_b)
-
+                temp_type_a = ParticleType(name=type_a.name)
+                temp_type_a.load_defaults()
+                temp_type_b = ParticleType(name=type_b.name)
+                temp_type_b.load_defaults()
+                radius_a = temp_type_a.radius if hasattr(temp_type_a, 'radius') else 0.8
+                radius_b = temp_type_b.radius if hasattr(temp_type_b, 'radius') else 0.8
+                # Use sum of covalent radii as cutoff
+                bonds_modifier.set_pairwise_cutoff(type_a.id, type_b.id, radius_a + radius_b)
         pipeline.modifiers.append(bonds_modifier)
-        data = pipeline.compute() # Re-compute to get molecule identifiers.
 
-        # Step 3: Group atoms by the new 'Molecule' identifier.
+        # Step 3: Identify molecules using cluster analysis based on bonding.
+        cluster_modifier = ClusterAnalysisModifier(neighbor_mode=ClusterAnalysisModifier.NeighborMode.Bonding)
+        pipeline.modifiers.append(cluster_modifier)
+        data = pipeline.compute()
+
+        # Step 4: Group atoms by the new 'Cluster' identifier.
         molecule_atoms = defaultdict(list)
-        if 'Molecule' in data.particles:
-            for i, mol_id in enumerate(data.particles['Molecule']):
-                if mol_id > 0: # 0 means not part of a molecule
-                    molecule_atoms[mol_id].append(i)
+        if 'Cluster' in data.particles:
+            for i, cluster_id in enumerate(data.particles['Cluster']):
+                if cluster_id > 0: # 0 means not part of a cluster
+                    molecule_atoms[cluster_id].append(i)
 
-        # Step 4: Convert groups to RDKit molecules and generate report.
+        # Step 5: Convert groups to RDKit molecules and generate report.
         molecule_groups = defaultdict(lambda: {'count': 0, 'molecules': []})
         for mol_id, atom_indices in molecule_atoms.items():
             if len(atom_indices) > 1:
