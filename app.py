@@ -5,14 +5,12 @@ from config import Config
 from database.db import db
 from database.models import AnalysisRun, StoichiometryResult, MoleculeInstance
 from molfinder.processor import LammpsProcessor
-from flask_migrate import Migrate
 from datetime import datetime
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 db.init_app(app)
-migrate = Migrate(app, db)
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -89,14 +87,11 @@ def analyze():
                     db.session.add(mol_instance)
 
             run.status = 'Completed'
-            run.log_messages = processor.get_log_messages()
             db.session.commit()
             return redirect(url_for('index', run_id=run.id))
 
         except Exception as e:
             run.status = 'Failed'
-            run.error_message = str(e)
-            run.log_messages = processor.get_log_messages() if 'processor' in locals() else ''
             db.session.commit()
             flash(f"An error occurred during analysis: {e}")
             return redirect(url_for('index', run_id=run.id))

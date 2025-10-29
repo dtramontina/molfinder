@@ -1,0 +1,22 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Git directory
+.git/
+.gitignore
+
+# Ignore Docker files
+Dockerfile
+.dockerignore
+
+# Ignore local development files
+.vscode/
+*.code-workspace
+flask_output.log
+jules-scratch/
+
+# Ignore uploads directory
+uploads/
