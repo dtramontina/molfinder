@@ -1,0 +1,37 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "type": "pydevd",
+            "name": "PyDev Run File Template",
+            "request": "run-file-template",
+            "env": {},
+            "args": []
+        },
+        {
+            "type": "pydevd",
+            "name": "PyDev Base Template",
+            "request": "base-template",
+            "env": {},
+            "args": [],
+            "variablePresentation": {
+                "special": "hide",
+                "function": "hide",
+                "class": "hide",
+                "protected": "inline"
+            }
+        },
+
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        }
+    ]
+}
