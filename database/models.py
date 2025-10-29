@@ -8,7 +8,6 @@ class AnalysisRun(db.Model):
     lammps_file = db.Column(db.String(256), nullable=False)
     atom_mappings = db.Column(db.String(256), nullable=False)
     status = db.Column(db.String(64), default='Pending')
-    error_message = db.Column(db.Text, nullable=True)
     
     stoichiometries = db.relationship('StoichiometryResult', backref='run', lazy=True, cascade="all, delete-orphan")
 

@@ -5,20 +5,29 @@ from config import Config
 from database.db import db
 from database.models import AnalysisRun, StoichiometryResult, MoleculeInstance
 from molfinder.processor import LammpsProcessor
-from flask_migrate import Migrate
 from datetime import datetime
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 db.init_app(app)
-migrate = Migrate(app, db)
+
+@app.before_request
+def create_tables():
+    # The following line will remove this function after it has been called once
+    app.before_request_funcs[None].remove(create_tables)
+    with app.app_context():
+        db.create_all()
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/')
 def index():
-    return render_template('index.html', title="Home")
+    run_id = request.args.get('run_id', None)
+    run = None
+    if run_id:
+        run = db.session.get(AnalysisRun, run_id)
+    return render_template('index.html', title="Home", run=run)
 
 @app.route('/analyze', methods=['GET', 'POST'])
 def analyze():
@@ -36,10 +45,6 @@ def analyze():
 
     if file.filename == '':
         flash('No file selected for uploading.')
-        return redirect(url_for('index'))
-
-    if not atom_mapping_str.strip():
-        flash('Atom type mapping is required.')
         return redirect(url_for('index'))
 
     if file:
@@ -90,14 +95,13 @@ def analyze():
 
             run.status = 'Completed'
             db.session.commit()
-            return redirect(url_for('results', run_id=run.id))
+            return redirect(url_for('index', run_id=run.id))
 
         except Exception as e:
             run.status = 'Failed'
-            run.error_message = str(e)
             db.session.commit()
             flash(f"An error occurred during analysis: {e}")
-            return redirect(url_for('index'))
+            return redirect(url_for('index', run_id=run.id))
 
 @app.route('/results/<int:run_id>')
 def results(run_id):
