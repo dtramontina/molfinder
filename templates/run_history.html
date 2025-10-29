@@ -3,28 +3,39 @@
 {% block content %}
 <div class="history-container">
     <h1>Analysis History</h1>
-    <table class="history-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Date</th>
-                <th>Input File</th>
-                <th>Atom Mappings</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for run in runs_pagination.items %}
-            <tr onclick="window.location='{{ url_for('results', run_id=run.id) }}';">
-                <td><a href="{{ url_for('results', run_id=run.id) }}">{{ run.name }}</a></td>
-                <td>{{ run.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ run.lammps_file.split('/')[-1] }}</td>
-                <td>{{ run.atom_mappings }}</td>
-                <td class="status-{{ run.status.lower() }}">{{ run.status }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+
+    {% for run in runs_pagination.items %}
+    <div class="run-container" style="margin-bottom: 2em; border-top: 1px solid #ccc; padding-top: 1em;">
+        <h2>{{ run.name }} - {{ run.timestamp.strftime('%Y-%m-%d %H:%M') }}</h2>
+        <div class="tree-container">
+            <ul class="results-tree">
+                <li>
+                    <span class="caret">{{ run.name }}</span>
+                    <ul class="nested">
+                        {% for stoich in run.stoichiometries %}
+                        <li>
+                            <span class="caret">{{ stoich.formula }} (Count: {{ stoich.count }})</span>
+                            <ul class="nested">
+                                {% for molecule in stoich.molecules %}
+                                <li>
+                                    <a href="#" class="molecule-link" data-name="{{ molecule.name }}" data-smiles="{{ molecule.smiles }}" data-formula="{{ stoich.formula }}" data-image="{{ url_for('static', filename=molecule.image_path) }}">
+                                        {{ molecule.name }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class="log-container">
+            <h3>Analysis Log</h3>
+            <pre>{{ run.log_messages or "No log messages." }}</pre>
+        </div>
+    </div>
+    {% endfor %}
 
     <div class="pagination">
         {% if runs_pagination.has_prev %}
@@ -48,4 +59,53 @@
         {% endif %}
     </div>
 </div>
+
+<!-- The Modal -->
+<div id="moleculeModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3 id="modal-molecule-name"></h3>
+        <p><strong>Formula:</strong> <span id="modal-molecule-formula"></span></p>
+        <p><strong>SMILES:</strong> <span id="modal-molecule-smiles"></span></p>
+        <img id="modal-molecule-image" src="" alt="Molecule Image" style="width:100%">
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var toggler = document.getElementsByClassName("caret");
+        for (var i = 0; i < toggler.length; i++) {
+            toggler[i].addEventListener("click", function() {
+                this.parentElement.querySelector(".nested").classList.toggle("active");
+                this.classList.toggle("caret-down");
+            });
+        }
+
+        var modal = document.getElementById("moleculeModal");
+        var span = document.getElementsByClassName("close")[0];
+
+        document.querySelectorAll('.molecule-link').forEach(item => {
+            item.addEventListener('click', event => {
+                event.preventDefault();
+                document.getElementById('modal-molecule-name').textContent = item.dataset.name;
+                document.getElementById('modal-molecule-formula').textContent = item.dataset.formula;
+                document.getElementById('modal-molecule-smiles').textContent = item.dataset.smiles;
+                document.getElementById('modal-molecule-image').src = item.dataset.image;
+                modal.style.display = "block";
+            });
+        });
+
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    });
+</script>
 {% endblock %}
