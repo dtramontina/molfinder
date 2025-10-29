@@ -1,0 +1,14 @@
+services:
+  # A PostgreSQL database
+  - type: psql
+    name: molfinder-db
+    plan: free
+
+  # A web service that runs the Flask application
+  - type: web
+    name: molfinder
+    env: docker
+    # Give Render a hint on how to connect to the database
+    database:
+      name: molfinder-db
+      property: connectionString

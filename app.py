@@ -12,6 +12,13 @@ app.config.from_object(Config)
 
 db.init_app(app)
 
+@app.before_request
+def create_tables():
+    # The following line will remove this function after it has been called once
+    app.before_request_funcs[None].remove(create_tables)
+    with app.app_context():
+        db.create_all()
+
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/')
