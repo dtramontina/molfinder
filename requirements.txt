@@ -4,3 +4,4 @@ rdkit
 ovito
 requests
 gunicorn
+psycopg2-binary
